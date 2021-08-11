@@ -1,7 +1,13 @@
-custom stuff (ignore)/
-ui_stuff/
 .idea/
-notizen.md
+.vscode/
 __pycache__/
 venv/
 temp/
+tests/
+code_gen/
+__own__/
+
+MANIFEST.in
+ryvencore-drawio.xml
+setup.cfg
+setup.py
