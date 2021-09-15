@@ -3,14 +3,14 @@
 ################################################################################
 ## Form generated from reading UI file 'main_window.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.0.2
+## Created by: Qt User Interface Compiler version 5.15.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from qtpy.QtCore import *
-from qtpy.QtGui import *
-from qtpy.QtWidgets import *
+from PySide2.QtCore import *
+from PySide2.QtGui import *
+from PySide2.QtWidgets import *
 
 
 class Ui_MainWindow(object):
@@ -39,6 +39,12 @@ class Ui_MainWindow(object):
         self.actionSave_Pic_Viewport.setObjectName(u"actionSave_Pic_Viewport")
         self.actionSave_Pic_Whole_Scene_scaled = QAction(MainWindow)
         self.actionSave_Pic_Whole_Scene_scaled.setObjectName(u"actionSave_Pic_Whole_Scene_scaled")
+        self.actionNew_Script = QAction(MainWindow)
+        self.actionNew_Script.setObjectName(u"actionNew_Script")
+        self.actionRename_Script = QAction(MainWindow)
+        self.actionRename_Script.setObjectName(u"actionRename_Script")
+        self.actionDelete_Script = QAction(MainWindow)
+        self.actionDelete_Script.setObjectName(u"actionDelete_Script")
         self.centralWidget = QWidget(MainWindow)
         self.centralWidget.setObjectName(u"centralWidget")
         self.gridLayout = QGridLayout(self.centralWidget)
@@ -54,13 +60,13 @@ class Ui_MainWindow(object):
         self.left_vertical_splitter = QSplitter(self.main_horizontal_splitter)
         self.left_vertical_splitter.setObjectName(u"left_vertical_splitter")
         self.left_vertical_splitter.setOrientation(Qt.Vertical)
-        self.scripts_groupBox = QGroupBox(self.left_vertical_splitter)
-        self.scripts_groupBox.setObjectName(u"scripts_groupBox")
-        self.verticalLayout = QVBoxLayout(self.scripts_groupBox)
+        self.nodes_groupBox = QGroupBox(self.left_vertical_splitter)
+        self.nodes_groupBox.setObjectName(u"nodes_groupBox")
+        self.verticalLayout = QVBoxLayout(self.nodes_groupBox)
         self.verticalLayout.setSpacing(6)
         self.verticalLayout.setContentsMargins(11, 11, 11, 11)
         self.verticalLayout.setObjectName(u"verticalLayout")
-        self.left_vertical_splitter.addWidget(self.scripts_groupBox)
+        self.left_vertical_splitter.addWidget(self.nodes_groupBox)
         self.main_horizontal_splitter.addWidget(self.left_vertical_splitter)
         self.scripts_tab_widget = QTabWidget(self.main_horizontal_splitter)
         self.scripts_tab_widget.setObjectName(u"scripts_tab_widget")
@@ -87,6 +93,8 @@ class Ui_MainWindow(object):
         self.menuBar.setGeometry(QRect(0, 0, 1368, 21))
         self.menuFile = QMenu(self.menuBar)
         self.menuFile.setObjectName(u"menuFile")
+        self.menuScripts = QMenu(self.menuFile)
+        self.menuScripts.setObjectName(u"menuScripts")
         self.menuView = QMenu(self.menuBar)
         self.menuView.setObjectName(u"menuView")
         self.menuFlow_Design_Style = QMenu(self.menuView)
@@ -107,6 +115,10 @@ class Ui_MainWindow(object):
         self.menuBar.addAction(self.menuDebugging.menuAction())
         self.menuFile.addAction(self.actionImport_Nodes)
         self.menuFile.addAction(self.actionSave_Project)
+        self.menuFile.addAction(self.menuScripts.menuAction())
+        self.menuScripts.addAction(self.actionNew_Script)
+        self.menuScripts.addAction(self.actionRename_Script)
+        self.menuScripts.addAction(self.actionDelete_Script)
         self.menuView.addSeparator()
         self.menuView.addAction(self.menuFlow_Design_Style.menuAction())
         self.menuView.addAction(self.menuSave_Picture.menuAction())
@@ -143,9 +155,13 @@ class Ui_MainWindow(object):
 "The more you zoomed in, the sharper the picture.\n"
 "This will take a few seconds.", None))
 #endif // QT_CONFIG(tooltip)
-        self.scripts_groupBox.setTitle(QCoreApplication.translate("MainWindow", u"Scripts", None))
+        self.actionNew_Script.setText(QCoreApplication.translate("MainWindow", u"New", None))
+        self.actionRename_Script.setText(QCoreApplication.translate("MainWindow", u"Rename", None))
+        self.actionDelete_Script.setText(QCoreApplication.translate("MainWindow", u"Delete", None))
+        self.nodes_groupBox.setTitle(QCoreApplication.translate("MainWindow", u"Nodes", None))
         self.scripts_tab_widget.setTabText(self.scripts_tab_widget.indexOf(self.tab), QCoreApplication.translate("MainWindow", u"Main", None))
         self.menuFile.setTitle(QCoreApplication.translate("MainWindow", u"File", None))
+        self.menuScripts.setTitle(QCoreApplication.translate("MainWindow", u"Scripts", None))
         self.menuView.setTitle(QCoreApplication.translate("MainWindow", u"View", None))
         self.menuFlow_Design_Style.setTitle(QCoreApplication.translate("MainWindow", u"Flow Theme", None))
         self.menuSave_Picture.setTitle(QCoreApplication.translate("MainWindow", u"Save Picture", None))
