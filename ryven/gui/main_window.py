@@ -1,10 +1,12 @@
 import sys
-from os.path import join, dirname
+import os
+import os.path
 
 from qtpy.QtGui import QIcon, QKeySequence
-from qtpy.QtWidgets import QMainWindow, QFileDialog, QDialog, QShortcut, QAction, QActionGroup, QMenu, QMessageBox
+from qtpy.QtWidgets import QMainWindow, QFileDialog, QShortcut, QAction, QActionGroup, QMenu, QMessageBox
 
-from ryven.gui.main_console import *
+from ryven import __version__
+from ryven.gui.main_console import MainConsole
 from ryven.gui.script_UI import ScriptUI
 from ryven.gui.styling.window_theme import WindowTheme
 from ryven.main.nodes_package import NodesPackage
@@ -20,8 +22,27 @@ import ryvencore_qt.src.conv_gui as rc_GUI
 
 class MainWindow(QMainWindow):
 
-    def __init__(self, config, window_theme: WindowTheme):
-        super(MainWindow, self).__init__()
+    def __init__(
+            self,
+
+            window_title,
+            window_theme: WindowTheme,
+            flow_theme,
+
+            # Notice, the below default values are overwritten by the default values of the cmd
+            # line argument parser, when launching the application with cmd line arguments.
+
+            action: str = "create new project",  # or "open project'
+            requested_packages: set = set(),
+            required_packages: set = None,  # only valid when project_content is provided
+            project_content: dict = None,
+            info_msgs_enabled: bool = False,
+            performance_mode: str = 'pretty',
+            animations_enabled: bool = True,
+
+            parent=None,
+    ):
+        super().__init__(parent)
 
         self.session = None
         self.theme = window_theme
@@ -29,8 +50,11 @@ class MainWindow(QMainWindow):
         self.script_UIs = {}
 
         # SESSION
-        self.session = rc.Session(custom_classes={'node base': NodeBase})
-        # self.session.info_messenger().enable(True)
+        self.session = rc.Session()
+        if info_msgs_enabled:
+            self.session.info_messenger().enable(traceback=True)
+        else:
+            self.session.info_messenger().disable()
 
         self.session.flow_view_created.connect(self.script_created)
         self.session.script_renamed.connect(self.script_renamed)
@@ -39,10 +63,9 @@ class MainWindow(QMainWindow):
         # LOAD DESIGN AND FLOW THEME
         self.session.design.load_from_config(abs_path_from_package_dir('gui/styling/design_config.json'))
 
-        if self.theme.name == 'dark':
-            self.session.design.set_flow_theme(name='pure dark')
-        else:  # 'light'
-            self.session.design.set_flow_theme(name='pure light')
+        self.session.design.set_flow_theme(name=flow_theme)
+        self.session.design.set_performance_mode(performance_mode)
+        self.session.design.set_animations_enabled(animations_enabled)
 
         # UI
         self.setup_ui()
@@ -50,7 +73,7 @@ class MainWindow(QMainWindow):
         self.flow_view_theme_actions = []
         self.setup_menu_actions()
 
-        self.setWindowTitle('Ryven')
+        self.setWindowTitle(window_title)
         self.setWindowIcon(QIcon(abs_path_from_package_dir('resources/pics/Ryven_icon.png')))
         self.ui.scripts_tab_widget.removeTab(0)  # remove placeholder tab
 
@@ -59,17 +82,6 @@ class MainWindow(QMainWindow):
         save_shortcut.activated.connect(self.on_save_project_triggered)
         import_nodes_shortcut = QShortcut(QKeySequence('Ctrl+i'), self)
         import_nodes_shortcut.activated.connect(self.on_import_nodes_triggered)
-
-        # TEMP FOLDER
-        temp_path = abs_path_from_package_dir('temp')
-        if not os.path.exists(temp_path):
-            os.mkdir(temp_path)
-        for f in os.listdir(temp_path):
-            os.remove(join(temp_path, f))
-
-        # PROJECT SETUP
-        if 'info_msgs' in sys.argv:
-            rc.InfoMsgs.enable()
 
         #   SETUP MAIN CONSOLE
         MainConsole.instance.session = self.session
@@ -80,26 +92,31 @@ class MainWindow(QMainWindow):
         self.import_nodes(path=abs_path_from_package_dir('main/nodes/built_in/'))
 
         #   LOAD PROJECT
-        if config['config'] == 'create plain new project':
+        # Requested packages take precedence over other packages
+        print('importing requested packages...')
+        self.import_packages(requested_packages)
+        if action == 'create project':
             self.session.create_script(title='hello world')
-        elif config['config'] == 'open project':
-            print('importing packages...')
-            self.import_packages(config['required packages'])
+        elif action == 'open project':
+            print('importing required packages...')
+            self.import_packages(required_packages)
             print('loading project...')
-            self.session.load(config['content'])
-            print('finished')
+            self.session.load(project_content)
+            print('done')
 
-        self.resize(1500, 800)
+        self.resize(1500, 800)  # FIXME: this renders the --geometry argument useless, no?
         # self.showMaximized()
 
     def print_info(self):
         print('''
 CONTROLS
-place: right mouse
-select: left mouse
-pan: right mouse
-save: ctrl+s
-import: ctrl+i
+    nodes dialog: right mouse in scene
+    place nodes: drag and drop from left
+        or hit enter in scene dialog
+    select: left mouse
+    pan / navigating scene: right mouse
+    save: ctrl+s
+    import: ctrl+i
         ''')
 
     # UI
@@ -111,15 +128,21 @@ import: ctrl+i
 
         # main console
         if MainConsole.instance is not None:
-            self.ui.bottom_splitter.addWidget(MainConsole.instance)
+            self.ui.main_vertical_splitter.addWidget(MainConsole.instance)
+            self.ui.console_placeholder_widget.setParent(None)
         # self.ui.right_vertical_splitter.setSizes([600, 0])
 
         # splitter sizes
         # self.ui.left_vertical_splitter.setSizes([350, 350])
         self.ui.main_vertical_splitter.setSizes([700, 0])
 
+        self.scripts_list_widget = rc_GUI.ScriptsList(self.session)
+        self.ui.scripts_groupBox.layout().addWidget(self.scripts_list_widget)
+
         self.nodes_list_widget = rc_GUI.NodeListWidget(self.session)
         self.ui.nodes_groupBox.layout().addWidget(self.nodes_list_widget)
+
+        self.ui.main_horizontal_splitter.setSizes([120, 800-120])
 
     def setup_menu_actions(self):
 
@@ -205,14 +228,14 @@ import: ctrl+i
     # SLOTS
 
     def on_import_nodes_triggered(self):
-        file_path = QFileDialog.getOpenFileName(self, 'select nodes file', abs_path_from_ryven_dir('nodes'), '(*.py)', )[0]
+        file_path = QFileDialog.getOpenFileName(self, 'select nodes file', abs_path_from_ryven_dir('nodes'), 'Python File (*.py)')[0]
         if file_path != '':
-            self.import_nodes(path=dirname(file_path))
+            self.import_nodes(path=os.path.dirname(file_path))
 
     def on_import_example_nodes_triggered(self):
-        file_path = QFileDialog.getOpenFileName(self, 'select nodes file', abs_path_from_package_dir('example_nodes'), '(*.py)', )[0]
+        file_path = QFileDialog.getOpenFileName(self, 'select nodes file', abs_path_from_package_dir('example_nodes'), 'Python File (*.py)')[0]
         if file_path != '':
-            self.import_nodes(path=dirname(file_path))
+            self.import_nodes(path=os.path.dirname(file_path))
 
     def on_performance_mode_changed(self, action):
         if action == self.ac_perf_mode_fast:
@@ -260,7 +283,10 @@ import: ctrl+i
 
     def on_save_project_triggered(self):
         file_name = QFileDialog.getSaveFileName(self, 'select location and give file name',
-                                                abs_path_from_ryven_dir('saves'), '(*.json)')[0]
+                                                abs_path_from_ryven_dir('saves'), 'JSON(*.json)')[0]
+        if not file_name.endswith('.json'):
+            file_name += '.json'
+
         if file_name != '':
             self.save_project(file_name)
 
@@ -332,12 +358,18 @@ import: ctrl+i
         else:
             p = NodesPackage(path)
 
+        if p in self.node_packages.values():
+            # never import package twice!
+            # different packages with same name are forbidden
+            print('package with this name already exists')
+            return
+
         try:
             nodes = import_nodes_package(p)
         except ModuleNotFoundError as e:
             msg_box = QMessageBox(QMessageBox.Warning, 'Missing Python module', str(e), QMessageBox.Ok, self)
             msg_box.exec_()
-            sys.exit()
+            sys.exit(e)
 
         self.session.register_nodes(nodes)
 
@@ -358,7 +390,7 @@ import: ctrl+i
             rc.InfoMsgs.write('couldn\'t open file')
             return
 
-        general_project_info_dict = {'type': 'Ryven project file'}
+        general_project_info_dict = {'type': 'Ryven project file', 'ryven version': __version__}
 
         scripts_data = self.session.serialize()
 
