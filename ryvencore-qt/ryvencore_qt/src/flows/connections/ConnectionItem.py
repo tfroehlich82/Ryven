@@ -1,12 +1,19 @@
 # import math
-from qtpy.QtCore import QMarginsF
-from qtpy.QtCore import QRectF, QPointF, Qt
+from typing import List
+from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QPainter, QColor, QRadialGradient, QPainterPath, QPen
-from qtpy.QtWidgets import QGraphicsPathItem, QGraphicsItem, QStyleOptionGraphicsItem
+from qtpy.QtWidgets import (
+    QGraphicsPathItem,
+    QGraphicsItem,
+    QStyleOptionGraphicsItem,
+    QGraphicsEllipseItem,
+)
 
 from ...GUIBase import GUIBase
 from ...utils import sqrt
 from ...utils import pythagoras
+from ...flows.nodes.PortItem import PortItem
+from .ConnectionAnimation import ConnPathItemsAnimation, ConnPathItemsAnimationScaled
 
 
 class ConnectionItem(GUIBase, QGraphicsPathItem):
@@ -24,8 +31,8 @@ class ConnectionItem(GUIBase, QGraphicsPathItem):
 
         out_port_index = out.node.outputs.index(out)
         inp_port_index = inp.node.inputs.index(inp)
-        self.out_item = out.node.gui.item.outputs[out_port_index]
-        self.inp_item = inp.node.gui.item.inputs[inp_port_index]
+        self.out_item: PortItem = out.node.gui.item.outputs[out_port_index]
+        self.inp_item: PortItem = inp.node.gui.item.inputs[inp_port_index]
 
         self.session_design = session_design
         self.session_design.flow_theme_changed.connect(self.recompute)
@@ -33,22 +40,52 @@ class ConnectionItem(GUIBase, QGraphicsPathItem):
 
         # for rendering flow pictures
         self.setCacheMode(QGraphicsItem.DeviceCoordinateCache)
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
+
+        diam = 12.5
+        self.num_dots = 40
+        self.dots = [
+            QGraphicsEllipseItem(-diam / 2, -diam / 2, diam, diam, self) 
+            for _ in range(self.num_dots)
+        ]
+        for dot in self.dots:
+            dot.setVisible(False)
+
+        # TODO: the connection animation is currently unused because we need a 
+        #       signel for when the node output is updated
+        self.items_path_animation = ConnPathItemsAnimation(self.dots, self)
+        self.connection_animation = ConnPathItemsAnimationScaled(self.items_path_animation)
 
         self.recompute()
 
+    def __str__(self):
+        out, inp = self.connection
+        node_in_name = f'{inp.node.gui.item}'
+        node_in_index = inp.node.inputs.index(inp)
+        node_out_name = f'{out.node.gui.item}'
+        node_out_index = out.node.outputs.index(out)
+        return f'{node_out_index}->{node_in_index} ({node_out_name}, {node_in_name})'
+
+    def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget):
+        # draw path
+        painter.setBrush(self.brush())
+        painter.setPen(self.pen())
+        painter.drawPath(self.path())
+        # return super().paint(painter, option, widget)
+
     def recompute(self):
-        """Updates scene position and recomputes path, pen and gradient"""
+        """Updates scene position and recomputes path, pen, gradient and dots"""
+
+        # dots
+        self.items_path_animation.recompute()
 
         # position
         self.setPos(self.out_pos())
 
         # path
-        self.setPath(
-            self.connection_path(
-                QPointF(0, 0),
-                self.inp_pos()-self.scenePos()
-            )
-        )
+        p1 = QPointF(self.out_item.pin.width_no_padding() * 0.5, 0)
+        p2 = self.inp_pos() - self.scenePos() - QPointF(self.inp_item.pin.width_no_padding() * 0.5, 0)
+        self.setPath(self.connection_path(p1, p2))
 
         # pen
         pen = self.get_pen()
@@ -62,7 +99,7 @@ class ConnectionItem(GUIBase, QGraphicsPathItem):
             w = self.path().boundingRect().width()
             h = self.path().boundingRect().height()
             gradient = QRadialGradient(
-                self.boundingRect().center(),
+                self.boundingRect().center(), 
                 pythagoras(w, h) / 2
             )
 
@@ -96,16 +133,23 @@ class ConnectionItem(GUIBase, QGraphicsPathItem):
             pen.setBrush(gradient)
 
         self.setPen(pen)
-    
+
     def out_pos(self) -> QPointF:
         """The current global scene position of the pin of the output port"""
 
         return self.out_item.pin.get_scene_center_pos()
-    
+
     def inp_pos(self) -> QPointF:
         """The current global scene position of the pin of the input port"""
 
         return self.inp_item.pin.get_scene_center_pos()
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemSelectedHasChanged or (
+            change == QGraphicsItem.ItemVisibleHasChanged and self.isVisible()
+        ):
+            self.set_highlighted(self.isSelected())
+        return QGraphicsItem.itemChange(self, change, value)
 
     def set_highlighted(self, b: bool):
         pen: QPen = self.pen()
@@ -124,6 +168,9 @@ class ConnectionItem(GUIBase, QGraphicsPathItem):
     def pen_width(self) -> int:
         pass
 
+    def get_style_color(self):
+        pass
+
     def flow_theme(self):
         return self.session_design.flow_theme
 
@@ -132,17 +179,22 @@ class ConnectionItem(GUIBase, QGraphicsPathItem):
         super().hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event):
-        self.set_highlighted(False)
+        if not self.isSelected():
+            self.set_highlighted(False)
         super().hoverLeaveEvent(event)
 
+    # uncomment to test connection animation:
+    # 
+    # def mouseReleaseEvent(self, event) -> None:
+    #    self.connection_animation.toggle()
+        
     @staticmethod
     def dist(p1: QPointF, p2: QPointF) -> float:
         """Returns the diagonal distance between the points using pythagoras"""
 
-        dx = p2.x()-p1.x()
-        dy = p2.y()-p1.y()
+        dx = p2.x() - p1.x()
+        dy = p2.y() - p1.y()
         return sqrt((dx**2) + (dy**2))
-
 
     @staticmethod
     def connection_path(p1: QPointF, p2: QPointF) -> QPainterPath:
@@ -152,7 +204,6 @@ class ConnectionItem(GUIBase, QGraphicsPathItem):
 
 
 class ExecConnectionItem(ConnectionItem):
-
     def pen_width(self):
         return self.flow_theme().exec_conn_width
 
@@ -163,9 +214,11 @@ class ExecConnectionItem(ConnectionItem):
         pen.setCapStyle(Qt.RoundCap)
         return pen
 
+    def get_style_color(self):
+        return self.flow_theme().exec_conn_color
+
 
 class DataConnectionItem(ConnectionItem):
-
     def pen_width(self):
         return self.flow_theme().data_conn_width
 
@@ -175,6 +228,9 @@ class DataConnectionItem(ConnectionItem):
         pen.setStyle(theme.data_conn_pen_style)
         pen.setCapStyle(Qt.RoundCap)
         return pen
+
+    def get_style_color(self):
+        return self.flow_theme().data_conn_color
 
 
 def default_cubic_connection_path(p1: QPointF, p2: QPointF):
@@ -188,7 +244,7 @@ def default_cubic_connection_path(p1: QPointF, p2: QPointF):
     adx = abs(dx)
     dy = p2.y() - p1.y()
     ady = abs(dy)
-    distance = sqrt((dx ** 2) + (dy ** 2))
+    distance = sqrt((dx**2) + (dy**2))
     x1, y1 = p1.x(), p1.y()
     x2, y2 = p2.x(), p2.y()
 
@@ -210,5 +266,5 @@ def default_cubic_connection_path(p1: QPointF, p2: QPointF):
         path.cubicTo(x1 + 100 + (x1 - x2) / 3, y1,
                      x2 - 100 - (x1 - x2) / 3, y2,
                      x2, y2)
-    
+
     return path
